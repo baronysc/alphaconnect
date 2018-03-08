@@ -7,14 +7,16 @@ import (
 	"encoding/json"
 	"env"
 	"fmt"
+	"mgodb"
 	"msg"
 	"net/http"
 
 	"github.com/davecgh/go-spew/spew"
+	"github.com/fatih/color"
 )
 
 // ArmorKey 用來提供給 hmac 轉換，並驗證傳值的正確性
-const ArmorKey string = "OQrdcqpv26hBr8ef"
+const AlphaKey string = "OQrdcqpv26hBr8ef"
 
 // GenSign 驗證傳值的正確性
 func GenSign(appkey string, data string) string {
@@ -33,8 +35,16 @@ func main() {
 
 	spew.Dump(env.Data)
 
-	msg.SetSubjoinFileName("alpha")
+	msg.SetSubjoinFileName("alpha") // 附加額外的 log 檔案名稱，若不執行則為空字串
 	msg.Start()
+
+	if mgodb.Start() != nil {
+		color.Set(color.FgRed)
+		fmt.Println("ERROR: mongodb run fail")
+		color.Unset()
+		msg.Log("ERROR: mongodb run fail")
+		return
+	}
 
 	startListen := make(chan bool, 1)
 
