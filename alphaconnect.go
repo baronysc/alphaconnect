@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"env"
 	"fmt"
+	"msg"
 	"net/http"
 
 	"github.com/davecgh/go-spew/spew"
@@ -31,6 +32,9 @@ func main() {
 	env.Start()
 
 	spew.Dump(env.Data)
+
+	msg.SetSubjoinFileName("alpha")
+	msg.Start()
 
 	startListen := make(chan bool, 1)
 
