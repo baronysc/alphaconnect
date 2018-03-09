@@ -18,11 +18,6 @@ import (
 	"github.com/fatih/color"
 )
 
-type _RecvData struct {
-	Sign string      `json:"sign"`
-	Data interface{} `json:"data"`
-}
-
 func main() {
 
 	fmt.Println("Provide alpha get mongo db data")
@@ -69,23 +64,13 @@ func main() {
 
 // ReturnData 用來準備回傳資料使用
 type ReturnData struct {
-	State   int         `json:"state"`
-	Text    string      `json:"text"`
-	Error   interface{} `json:"error, omitempty"`
-	Content interface{} `json:"content, omitempty"`
+	State   int    `json:"state"`
+	Message string `json:"Message"`
+	Data    string `json:"data"`
 }
 
 // AlphaKey 用來提供給 hmac 轉換，並驗證傳值的正確性
 const AlphaKey string = "OQrdcqpv26hBr8ef"
-
-// GenSign 驗證傳值的正確性, 之前 server 的寫法
-func GenSign(appkey string, data string) string {
-	key := []byte(appkey)
-	mac := hmac.New(sha1.New, key)
-	mac.Write([]byte(data))
-	sign := base64.StdEncoding.EncodeToString(mac.Sum(nil))
-	return sign
-}
 
 // signature 簽章判斷
 func (r *ReturnData) signature(_Sign string, _Data string) bool {
@@ -140,7 +125,7 @@ func JokeBack(w http.ResponseWriter, r *http.Request) {
 }
 
 type _IDinfo struct {
-	IgsID   int    `json:"igsid`
+	IgsID   int    `json:"igsid"`
 	AlphaID string `json:"alphaid"`
 }
 
@@ -152,13 +137,40 @@ type _RecvPlayerData struct {
 // Registered 用來給 client 註冊奧飛通行證資料
 func Registered(w http.ResponseWriter, r *http.Request) {
 
-	// 未做認證
+	returnData := ReturnData{}
+	returnData.State = 0
 
-	result := mgodb.AlphaData.Registered(3, "3")
+	originSource, _ := ioutil.ReadAll(r.Body)
 
-	resultString := "Registered:" + result.Error()
+	recvData := _RecvPlayerData{}
+	err := json.Unmarshal(originSource, &recvData)
+	if err != nil {
+		fmt.Println(err)
+		returnData.State = -1
+		returnData.Message = "Registered:json unmarshal fail"
+		b, _ := json.Marshal(returnData)
+		w.Write([]byte(b))
+		return
+	}
+
+	// 簽章認證
+	signData, _ := json.Marshal(recvData.Data)
+	if returnData.signature(recvData.Sign, string(signData)) == false {
+		fmt.Println(err)
+		returnData.State = -2
+		returnData.Message = "Registered:sign fail"
+		b, _ := json.Marshal(returnData)
+		w.Write([]byte(b))
+		return
+	}
+
+	result := mgodb.AlphaData.Registered(recvData.Data.IgsID, recvData.Data.AlphaID)
+
+	resultString := result.Error()
 
 	b, _ := json.Marshal(resultString)
+	returnData.Data = string(b)
+	b, _ = json.Marshal(returnData)
 
 	w.Write([]byte(b))
 
@@ -167,17 +179,47 @@ func Registered(w http.ResponseWriter, r *http.Request) {
 // Playerinfo 用來給 client 直接讀玩家資料使用
 func Playerinfo(w http.ResponseWriter, r *http.Request) {
 
-	// 未做認證
+	returnData := ReturnData{}
+	returnData.State = 0
 
-	info, err := mgodb.AlphaData.Playerinfo(3, "3")
+	originSource, _ := ioutil.ReadAll(r.Body)
+
+	recvData := _RecvPlayerData{}
+	err := json.Unmarshal(originSource, &recvData)
+	if err != nil {
+		fmt.Println(err)
+		returnData.State = -1
+		returnData.Message = "Playerinfo:json unmarshal fail"
+		b, _ := json.Marshal(returnData)
+		w.Write([]byte(b))
+		return
+	}
+
+	// 簽章認證
+	signData, _ := json.Marshal(recvData.Data)
+	if returnData.signature(recvData.Sign, string(signData)) == false {
+		fmt.Println(err)
+		returnData.State = -2
+		returnData.Message = "Playerinfo:sign fail"
+		b, _ := json.Marshal(returnData)
+
+		w.Write([]byte(b))
+		return
+	}
+
+	info, err := mgodb.AlphaData.Playerinfo(recvData.Data.IgsID, recvData.Data.AlphaID)
 
 	if err != nil {
-		b, _ := json.Marshal("Playerinfo:not found")
+		returnData.State = -3
+		returnData.Message = "Playerinfo:not found"
+		b, _ := json.Marshal(returnData)
 		w.Write([]byte(b))
 		return
 	}
 
 	b, _ := json.Marshal(info)
+	returnData.Data = string(b)
+	b, _ = json.Marshal(returnData)
 
 	w.Write([]byte(b))
 
@@ -195,10 +237,10 @@ type _RecvRankData struct {
 // Rankinfo 用來給 client 直接讀取排名資料使用
 func Rankinfo(w http.ResponseWriter, r *http.Request) {
 
-	body, _ := ioutil.ReadAll(r.Body)
+	originSource, _ := ioutil.ReadAll(r.Body)
 
 	recvData := _RecvRankData{}
-	err := json.Unmarshal(body, &recvData)
+	err := json.Unmarshal(originSource, &recvData)
 	if err != nil {
 		fmt.Println(err)
 		b, _ := json.Marshal("Rankinfo:json unmarshal fail")
@@ -208,6 +250,7 @@ func Rankinfo(w http.ResponseWriter, r *http.Request) {
 
 	// 簽章認證
 	returnData := ReturnData{}
+	returnData.State = 0
 	signData, _ := json.Marshal(recvData.Data)
 	if returnData.signature(recvData.Sign, string(signData)) == false {
 		fmt.Println(err)
@@ -225,6 +268,9 @@ func Rankinfo(w http.ResponseWriter, r *http.Request) {
 	}
 
 	b, _ := json.Marshal(rank)
+	returnData.Data = string(b)
+
+	b, _ = json.Marshal(returnData)
 
 	w.Write([]byte(b))
 
