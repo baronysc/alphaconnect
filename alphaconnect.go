@@ -10,22 +10,12 @@ import (
 	"mgodb"
 	"msg"
 	"net/http"
+	"reflect"
+	"strings"
 
 	"github.com/davecgh/go-spew/spew"
 	"github.com/fatih/color"
 )
-
-// ArmorKey 用來提供給 hmac 轉換，並驗證傳值的正確性
-const AlphaKey string = "OQrdcqpv26hBr8ef"
-
-// GenSign 驗證傳值的正確性
-func GenSign(appkey string, data string) string {
-	key := []byte(appkey)
-	mac := hmac.New(sha1.New, key)
-	mac.Write([]byte(data))
-	sign := base64.StdEncoding.EncodeToString(mac.Sum(nil))
-	return sign
-}
 
 func main() {
 
@@ -50,11 +40,14 @@ func main() {
 
 	go func() {
 		http.HandleFunc("/", JokeBack)
+		http.HandleFunc("/Registered", Registered)
+		http.HandleFunc("/Playerinfo", Playerinfo)
+		http.HandleFunc("/Rankinfo", Rankinfo)
 
 		startListen <- true
 		fmt.Println("start listen")
 
-		http.ListenAndServe(":4321", nil)
+		http.ListenAndServe("0.0.0.0:8082", nil)
 	}()
 
 	// wait start listen
@@ -66,6 +59,60 @@ func main() {
 
 	select {}
 
+}
+
+// ReturnData 用來準備回傳資料使用
+type ReturnData struct {
+	State   int         `json:"state"`
+	Text    string      `json:"text"`
+	Error   interface{} `json:"error, omitempty"`
+	Content interface{} `json:"content, omitempty"`
+}
+
+// AlphaKey 用來提供給 hmac 轉換，並驗證傳值的正確性
+const AlphaKey string = "OQrdcqpv26hBr8ef"
+
+// GenSign 驗證傳值的正確性, 之前 server 的寫法
+func GenSign(appkey string, data string) string {
+	key := []byte(appkey)
+	mac := hmac.New(sha1.New, key)
+	mac.Write([]byte(data))
+	sign := base64.StdEncoding.EncodeToString(mac.Sum(nil))
+	return sign
+}
+
+// signature 簽章判斷
+func (r *ReturnData) signature(_Sign string, _Data string) bool {
+
+	key := []byte(AlphaKey)
+	mac := hmac.New(sha1.New, key)
+	mac.Write([]byte(_Data))
+	sign := base64.StdEncoding.EncodeToString(mac.Sum(nil))
+
+	if strings.Compare(sign, _Sign) != 0 {
+		r.State = -1
+		return false
+	}
+
+	return true
+}
+
+func (r *ReturnData) jsonContent(_Content interface{}) []byte {
+
+	rtnData, err := json.Marshal(_Content)
+
+	if err != nil {
+		// 列出失敗的資訊
+		v := reflect.ValueOf(_Content)
+		t := v.Type()
+		msg.Log("ERROR: struct name <<", t.Name(), ">> json marshal fail.")
+		for i := 0; i < v.NumField(); i++ {
+			msg.Log(t.Field(i).Name, v.Field(i).Type(), v.Field(i).Interface())
+		}
+		rtnData = []byte("ERROR:result data json marshal fail")
+	}
+
+	return rtnData
 }
 
 // serverSayHello 用來回應給連線不帶參數的 client 使用
@@ -81,6 +128,33 @@ func JokeBack(w http.ResponseWriter, r *http.Request) {
 	}
 
 	b, _ := json.Marshal(content)
+
+	w.Write([]byte(b))
+
+}
+
+// Registered 用來給 client 註冊奧飛通行證資料
+func Registered(w http.ResponseWriter, r *http.Request) {
+
+	b, _ := json.Marshal("Registered")
+
+	w.Write([]byte(b))
+
+}
+
+// Playerinfo 用來給 client 直接讀玩家資料使用
+func Playerinfo(w http.ResponseWriter, r *http.Request) {
+
+	b, _ := json.Marshal("Player Info")
+
+	w.Write([]byte(b))
+
+}
+
+// Rankinfo 用來給 client 直接讀取排名資料使用
+func Rankinfo(w http.ResponseWriter, r *http.Request) {
+
+	b, _ := json.Marshal("Rank Info")
 
 	w.Write([]byte(b))
 
