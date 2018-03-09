@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"env"
 	"fmt"
+	"io/ioutil"
 	"mgodb"
 	"msg"
 	"net/http"
@@ -16,6 +17,11 @@ import (
 	"github.com/davecgh/go-spew/spew"
 	"github.com/fatih/color"
 )
+
+type _RecvData struct {
+	Sign string      `json:"sign"`
+	Data interface{} `json:"data"`
+}
 
 func main() {
 
@@ -133,10 +139,26 @@ func JokeBack(w http.ResponseWriter, r *http.Request) {
 
 }
 
+type _IDinfo struct {
+	IgsID   int    `json:"igsid`
+	AlphaID string `json:"alphaid"`
+}
+
+type _RecvPlayerData struct {
+	Sign string  `json:"sign"`
+	Data _IDinfo `json:"data"`
+}
+
 // Registered 用來給 client 註冊奧飛通行證資料
 func Registered(w http.ResponseWriter, r *http.Request) {
 
-	b, _ := json.Marshal("Registered")
+	// 未做認證
+
+	result := mgodb.AlphaData.Registered(3, "3")
+
+	resultString := "Registered:" + result.Error()
+
+	b, _ := json.Marshal(resultString)
 
 	w.Write([]byte(b))
 
@@ -145,16 +167,64 @@ func Registered(w http.ResponseWriter, r *http.Request) {
 // Playerinfo 用來給 client 直接讀玩家資料使用
 func Playerinfo(w http.ResponseWriter, r *http.Request) {
 
-	b, _ := json.Marshal("Player Info")
+	// 未做認證
+
+	info, err := mgodb.AlphaData.Playerinfo(3, "3")
+
+	if err != nil {
+		b, _ := json.Marshal("Playerinfo:not found")
+		w.Write([]byte(b))
+		return
+	}
+
+	b, _ := json.Marshal(info)
 
 	w.Write([]byte(b))
 
 }
 
+type _Rankinfo struct {
+	Item int `json:"item`
+}
+
+type _RecvRankData struct {
+	Sign string    `json:"sign"`
+	Data _Rankinfo `json:"data"`
+}
+
 // Rankinfo 用來給 client 直接讀取排名資料使用
 func Rankinfo(w http.ResponseWriter, r *http.Request) {
 
-	b, _ := json.Marshal("Rank Info")
+	body, _ := ioutil.ReadAll(r.Body)
+
+	recvData := _RecvRankData{}
+	err := json.Unmarshal(body, &recvData)
+	if err != nil {
+		fmt.Println(err)
+		b, _ := json.Marshal("Rankinfo:json unmarshal fail")
+		w.Write([]byte(b))
+		return
+	}
+
+	// 簽章認證
+	returnData := ReturnData{}
+	signData, _ := json.Marshal(recvData.Data)
+	if returnData.signature(recvData.Sign, string(signData)) == false {
+		fmt.Println(err)
+		b, _ := json.Marshal("Rankinfo:sign fail")
+		w.Write([]byte(b))
+		return
+	}
+
+	rank, err := mgodb.AlphaData.Rankinfo(recvData.Data.Item)
+
+	if err != nil {
+		b, _ := json.Marshal("Rankinfo:not found")
+		w.Write([]byte(b))
+		return
+	}
+
+	b, _ := json.Marshal(rank)
 
 	w.Write([]byte(b))
 
