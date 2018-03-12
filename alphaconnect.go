@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"env"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"mgodb"
@@ -125,6 +126,51 @@ func (r *ReturnData) data2Base64(_Content interface{}) {
 	r.Base64String = base64.StdEncoding.EncodeToString(byteArray)
 }
 
+func (r *ReturnData) decodeArmorID(_ArmorID string) (int, error) {
+
+	var err error
+
+	if len(_ArmorID) != 12 { // 編碼不足12碼就表示資料錯誤
+		err = errors.New("id size not enough")
+		return 1, err
+	}
+
+	// 編碼轉換
+	checksum, err := strconv.Atoi(_ArmorID[len(_ArmorID)-2 : len(_ArmorID)])
+	if err != nil {
+		err = errors.New("check sum get fail")
+		return 2, err
+	}
+	sOriginID := _ArmorID[:len(_ArmorID)-2]
+	iOriginID, err := strconv.Atoi(sOriginID)
+	if err != nil {
+		err = errors.New("id string to int fail")
+		return 3, err
+	}
+
+	temp := 0
+	for {
+		temp += iOriginID & 0x0f
+		iOriginID = iOriginID >> 8
+
+		if iOriginID <= 0 {
+			break
+		}
+	}
+	if temp != checksum {
+		err = errors.New("check sum compare fail")
+		return 4, err
+	}
+
+	currentID, _ := strconv.Atoi(sOriginID)
+	if err != nil {
+		err = errors.New("current id string to ing fail")
+		return 5, err
+	}
+
+	return currentID, nil
+}
+
 // serverSayHello 用來回應給連線不帶參數的 client 使用
 type _ServerSayHello struct {
 	ClientIP string `json:"ClientIP"`
@@ -151,69 +197,15 @@ type _IDinfo struct {
 	AlphaID string `json:"alphaid"`
 }
 
-type _RecvRegisterData struct {
-	Sign string  `json:"sign"`
-	Data _IDinfo `json:"data"`
+type _RecvData struct {
+	Sign string `json:"sign"`
+	Data string `json:"data"`
 }
 
 // Registered 用來給 client 註冊奧飛通行證資料
 func Registered(w http.ResponseWriter, r *http.Request) {
 
-	returnData := ReturnData{}
-	returnData.State = 0
-
-	originSource, _ := ioutil.ReadAll(r.Body)
-
-	recvData := _RecvRegisterData{}
-	err := json.Unmarshal(originSource, &recvData)
-	if err != nil {
-		fmt.Println(err)
-		returnData.State = -1
-		returnData.Message = "Registered:json unmarshal fail"
-		b, _ := json.Marshal(returnData)
-		w.Write([]byte(b))
-		return
-	}
-
-	// 簽章認證
-	signData, _ := json.Marshal(recvData.Data)
-	if returnData.signature(recvData.Sign, string(signData)) == false {
-		fmt.Println(err)
-		returnData.State = -2
-		returnData.Message = "Registered:sign fail"
-		b, _ := json.Marshal(returnData)
-		w.Write([]byte(b))
-		return
-	}
-
-	currentID, err := strconv.Atoi(recvData.Data.ArmorID)
-	if err != nil {
-		returnData.State = -3
-		returnData.Message = "Registered:igs id fail"
-		b, _ := json.Marshal(returnData)
-		w.Write([]byte(b))
-		return
-	}
-
-	result := mgodb.AlphaData.Registered(currentID, recvData.Data.AlphaID)
-
-	resultString := result.Error()
-
-	// returnData.data2Base64(resultString)
-	returnData.Message = resultString
-	b, _ := json.Marshal(returnData)
-
-	w.Write([]byte(b))
-
-}
-
-type _RecvData struct {
-	Sign string `json:"sign"`
-	Data _ID    `json:"data"`
-}
-
-// PlayerinfoArmor 用來給 client 直接讀玩家資料使用
-func PlayerinfoArmor(w http.ResponseWriter, r *http.Request) {
+	msg.Log("Provide alpha registered ")
 
 	returnData := ReturnData{}
 	returnData.State = 0
@@ -223,7 +215,71 @@ func PlayerinfoArmor(w http.ResponseWriter, r *http.Request) {
 	recvData := _RecvData{}
 	err := json.Unmarshal(originSource, &recvData)
 	if err != nil {
-		fmt.Println(err)
+		msg.Log(err)
+		returnData.State = -1
+		returnData.Message = "Registered:json unmarshal fail"
+		b, _ := json.Marshal(returnData)
+		w.Write([]byte(b))
+		return
+	}
+
+	// 簽章認證
+	if returnData.signature(recvData.Sign, string(recvData.Data)) == false {
+		msg.Log("Registered:sign fail")
+		returnData.State = -2
+		returnData.Message = "Registered:sign fail"
+		b, _ := json.Marshal(returnData)
+		w.Write([]byte(b))
+		return
+	}
+
+	id := _IDinfo{}
+
+	byteArray, _ := base64.StdEncoding.DecodeString(recvData.Data)
+	err = json.Unmarshal(byteArray, &id)
+	if err != nil {
+		returnData.State = -3
+		returnData.Message = "Registered:json unmarshal fail"
+		b, _ := json.Marshal(returnData)
+		w.Write([]byte(b))
+		return
+	}
+
+	currentID, err := returnData.decodeArmorID(id.ArmorID)
+	if err != nil {
+		returnData.State = -4
+		returnData.Message = "Registered:igs id fail:" + err.Error()
+		b, _ := json.Marshal(returnData)
+		w.Write([]byte(b))
+		return
+	}
+
+	msg.Log("register current id:", currentID, ", alpha id:", id.AlphaID)
+	result := mgodb.AlphaData.Registered(currentID, id.AlphaID)
+
+	resultString := result.Error()
+
+	returnData.Message = resultString
+	b, _ := json.Marshal(returnData)
+
+	w.Write([]byte(b))
+
+}
+
+// PlayerinfoArmor 用來給 client 直接讀玩家資料使用
+func PlayerinfoArmor(w http.ResponseWriter, r *http.Request) {
+
+	msg.Log("Provide alpha search playerinfot from Armor account")
+
+	returnData := ReturnData{}
+	returnData.State = 0
+
+	originSource, _ := ioutil.ReadAll(r.Body)
+
+	recvData := _RecvData{}
+	err := json.Unmarshal(originSource, &recvData)
+	if err != nil {
+		msg.Log(err)
 		returnData.State = -1
 		returnData.Message = "Playerinfo:json unmarshal fail"
 		b, _ := json.Marshal(returnData)
@@ -232,9 +288,8 @@ func PlayerinfoArmor(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 簽章認證
-	signData, _ := json.Marshal(recvData.Data)
-	if returnData.signature(recvData.Sign, string(signData)) == false {
-		fmt.Println(err)
+	if returnData.signature(recvData.Sign, string(recvData.Data)) == false {
+		msg.Log("Registered:sign fail")
 		returnData.State = -2
 		returnData.Message = "Playerinfo:sign fail"
 		b, _ := json.Marshal(returnData)
@@ -243,19 +298,45 @@ func PlayerinfoArmor(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	currentID, err := strconv.Atoi(recvData.Data.ID)
+	id := _ID{}
+
+	byteArray, _ := base64.StdEncoding.DecodeString(recvData.Data)
+	err = json.Unmarshal(byteArray, &id)
 	if err != nil {
 		returnData.State = -3
-		returnData.Message = "Playerinfo:igs id fail"
+		returnData.Message = "Playerinfo:json unmarshal fail"
 		b, _ := json.Marshal(returnData)
 		w.Write([]byte(b))
 		return
 	}
 
+	VerifyError := ""
+
+	if len(id.ID) != 12 { // 編碼不足12碼就表示資料錯誤
+		VerifyError = "1"
+		msg.Log("Verify:", VerifyError)
+		returnData.State = -4
+		returnData.Message = "Playerinfo:igs id fail:" + VerifyError
+		b, _ := json.Marshal(returnData)
+		w.Write([]byte(b))
+		return
+	}
+
+	// 編碼轉換
+	currentID, err := returnData.decodeArmorID(id.ID)
+	if err != nil {
+		returnData.State = -4
+		returnData.Message = "Playerinfo:igs id fail:" + err.Error()
+		b, _ := json.Marshal(returnData)
+		w.Write([]byte(b))
+		return
+	}
+
+	msg.Log("search player id:", currentID)
 	info, err := mgodb.AlphaData.PlayerinfoArmor(currentID)
 
 	if err != nil {
-		returnData.State = -4
+		returnData.State = -5
 		returnData.Message = "Playerinfo:not found"
 		b, _ := json.Marshal(returnData)
 		w.Write([]byte(b))
@@ -272,6 +353,8 @@ func PlayerinfoArmor(w http.ResponseWriter, r *http.Request) {
 // PlayerinfoAlpha 用來給 client 直接讀玩家資料使用
 func PlayerinfoAlpha(w http.ResponseWriter, r *http.Request) {
 
+	msg.Log("Provide alpha search playerinfot from Alpha account")
+
 	returnData := ReturnData{}
 	returnData.State = 0
 
@@ -280,7 +363,7 @@ func PlayerinfoAlpha(w http.ResponseWriter, r *http.Request) {
 	recvData := _RecvData{}
 	err := json.Unmarshal(originSource, &recvData)
 	if err != nil {
-		fmt.Println(err)
+		msg.Log(err)
 		returnData.State = -1
 		returnData.Message = "Playerinfo:json unmarshal fail"
 		b, _ := json.Marshal(returnData)
@@ -289,9 +372,8 @@ func PlayerinfoAlpha(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 簽章認證
-	signData, _ := json.Marshal(recvData.Data)
-	if returnData.signature(recvData.Sign, string(signData)) == false {
-		fmt.Println(err)
+	if returnData.signature(recvData.Sign, string(recvData.Data)) == false {
+		msg.Log("Registered:sign fail")
 		returnData.State = -2
 		returnData.Message = "Playerinfo:sign fail"
 		b, _ := json.Marshal(returnData)
@@ -300,9 +382,24 @@ func PlayerinfoAlpha(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	info, err := mgodb.AlphaData.PlayerinfoAlpha(recvData.Data.ID)
+	id := _ID{}
+
+	byteArray, _ := base64.StdEncoding.DecodeString(recvData.Data)
+	err = json.Unmarshal(byteArray, &id)
+	if err != nil {
+		returnData.State = -3
+		returnData.Message = "Playerinfo:json unmarshal fail"
+		b, _ := json.Marshal(returnData)
+		w.Write([]byte(b))
+		return
+	}
+
+	msg.Log("search alpha id:", id.ID)
+
+	info, err := mgodb.AlphaData.PlayerinfoAlpha(id.ID)
 
 	if err != nil {
+		msg.Log(err)
 		returnData.State = -4
 		returnData.Message = "Playerinfo:not found"
 		b, _ := json.Marshal(returnData)
@@ -320,42 +417,65 @@ func PlayerinfoAlpha(w http.ResponseWriter, r *http.Request) {
 // Rankinfo 用來給 client 直接讀取排名資料使用
 func Rankinfo(w http.ResponseWriter, r *http.Request) {
 
+	msg.Log("Provide alpha search ranking data")
+
+	returnData := ReturnData{}
+	returnData.State = 0
+
 	originSource, _ := ioutil.ReadAll(r.Body)
 
 	recvData := _RecvData{}
 	err := json.Unmarshal(originSource, &recvData)
 	if err != nil {
-		fmt.Println(err)
-		b, _ := json.Marshal("Rankinfo:json unmarshal fail")
+		msg.Log(err)
+		returnData.State = -1
+		returnData.Message = "Rankinfo:json unmarshal fail"
+		b, _ := json.Marshal(returnData)
 		w.Write([]byte(b))
 		return
 	}
 
 	// 簽章認證
-	returnData := ReturnData{}
-	returnData.State = 0
-	signData, _ := json.Marshal(recvData.Data)
-	if returnData.signature(recvData.Sign, string(signData)) == false {
-		fmt.Println(err)
-		b, _ := json.Marshal("Rankinfo:sign fail")
+	if returnData.signature(recvData.Sign, string(recvData.Data)) == false {
+		msg.Log("Registered:sign fail")
+		returnData.State = -2
+		returnData.Message = "Rankinfo:sign fail"
+		b, _ := json.Marshal(returnData)
+
 		w.Write([]byte(b))
 		return
 	}
 
-	index, err := strconv.Atoi(recvData.Data.ID)
+	id := _ID{}
+
+	byteArray, _ := base64.StdEncoding.DecodeString(recvData.Data)
+	err = json.Unmarshal(byteArray, &id)
 	if err != nil {
 		returnData.State = -3
+		returnData.Message = "Rankinfo:json unmarshal fail"
+		b, _ := json.Marshal(returnData)
+		w.Write([]byte(b))
+		return
+	}
+
+	index, err := strconv.Atoi(id.ID)
+	if err != nil {
+		returnData.State = -4
 		returnData.Message = "Rankinfo:activity id fail"
 		b, _ := json.Marshal(returnData)
 		w.Write([]byte(b))
 		return
 	}
 
+	msg.Log("search ranking index:", index)
 	rank, err := mgodb.AlphaData.Rankinfo(index)
 
 	if err != nil {
-		b, _ := json.Marshal("Rankinfo:not found")
+		returnData.State = -5
+		returnData.Message = "Rankinfo:not found"
+		b, _ := json.Marshal(returnData)
 		w.Write([]byte(b))
+
 		return
 	}
 
