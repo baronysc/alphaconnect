@@ -47,6 +47,8 @@ func main() {
 		http.HandleFunc("/Playerinfo_Alpha", PlayerinfoAlpha)
 		http.HandleFunc("/Playerinfo_Armor", PlayerinfoArmor)
 		http.HandleFunc("/Rankinfo", Rankinfo)
+		http.HandleFunc("/RankinfoArmor", RankinfoArmor)
+		http.HandleFunc("/RankinfoAlpha", RankinfoAlpha)
 
 		startListen <- true
 		fmt.Println("start listen")
@@ -185,6 +187,10 @@ type _ID struct {
 type _IDinfo struct {
 	ArmorID string `json:"armorid"`
 	AlphaID string `json:"alphaid"`
+}
+type _IDRankinfo struct {
+	ID    string `json:"id"`
+	Index string `json:"index"`
 }
 
 type _RecvData struct {
@@ -373,7 +379,6 @@ func PlayerinfoAlpha(w http.ResponseWriter, r *http.Request) {
 	msg.Log("search alpha id:", id.ID)
 
 	info, err := mgodb.AlphaData.PlayerinfoAlpha(id.ID)
-
 	if err != nil {
 		msg.Log(err)
 		returnData.Data = "Playerinfo:not found"
@@ -441,7 +446,6 @@ func Rankinfo(w http.ResponseWriter, r *http.Request) {
 
 	msg.Log("search ranking index:", index)
 	rank, err := mgodb.AlphaData.Rankinfo(index)
-
 	if err != nil {
 		returnData.Data = "Rankinfo:not found"
 		b, _ := json.Marshal(returnData)
@@ -456,4 +460,149 @@ func Rankinfo(w http.ResponseWriter, r *http.Request) {
 	b, _ := json.Marshal(returnData)
 
 	w.Write([]byte(b))
+}
+
+// RankinfoArmor 用來給 client 依玩家資料取排名使用
+func RankinfoArmor(w http.ResponseWriter, r *http.Request) {
+	msg.Log("Provide alpha search player rank")
+
+	returnData := ReturnData{}
+
+	originSource, _ := ioutil.ReadAll(r.Body)
+
+	recvData := _RecvData{}
+	err := json.Unmarshal(originSource, &recvData)
+	if err != nil {
+		msg.Log(err)
+		returnData.Data = "Rankinfo:json unmarshal fail"
+		b, _ := json.Marshal(returnData)
+		w.Write([]byte(b))
+		return
+	}
+
+	// 簽章認證
+	if returnData.compareSignature(recvData.Sign, string(recvData.Data)) == false {
+		msg.Log("Registered:sign fail")
+		returnData.Data = "Rankinfo:sign fail"
+		b, _ := json.Marshal(returnData)
+
+		w.Write([]byte(b))
+		return
+	}
+
+	id := _IDRankinfo{}
+
+	byteArray, _ := base64.StdEncoding.DecodeString(recvData.Data)
+	err = json.Unmarshal(byteArray, &id)
+	if err != nil {
+		returnData.Data = "Rankinfo:json unmarshal fail"
+		b, _ := json.Marshal(returnData)
+		w.Write([]byte(b))
+		return
+	}
+
+	currentID, err := returnData.decodeArmorID(id.ID)
+	if err != nil {
+		returnData.Data = "Rankinfo:igs id decode fail:" + err.Error()
+		b, _ := json.Marshal(returnData)
+		w.Write([]byte(b))
+		return
+	}
+
+	index, err := strconv.Atoi(id.Index)
+	if err != nil {
+		returnData.Data = "Rankinfo:activity index fail"
+		b, _ := json.Marshal(returnData)
+		w.Write([]byte(b))
+		return
+	}
+
+	rank, err := mgodb.AlphaData.RankinfoFromPlayer(index, int64(currentID))
+	if err != nil {
+		returnData.Data = "Rankinfo:not found"
+		b, _ := json.Marshal(returnData)
+		w.Write([]byte(b))
+		return
+	}
+
+	returnData.data2Base64(rank)
+	returnData.setSignature(returnData.Data)
+
+	b, _ := json.Marshal(returnData)
+
+	w.Write([]byte(b))
+}
+
+// RankinfoAlpha 用來給 client 依玩家資料取排名使用
+func RankinfoAlpha(w http.ResponseWriter, r *http.Request) {
+
+	msg.Log("Provide alpha search player rank")
+
+	returnData := ReturnData{}
+
+	originSource, _ := ioutil.ReadAll(r.Body)
+
+	recvData := _RecvData{}
+	err := json.Unmarshal(originSource, &recvData)
+	if err != nil {
+		msg.Log(err)
+		returnData.Data = "Rankinfo:json unmarshal fail"
+		b, _ := json.Marshal(returnData)
+		w.Write([]byte(b))
+		return
+	}
+
+	// 簽章認證
+	if returnData.compareSignature(recvData.Sign, string(recvData.Data)) == false {
+		msg.Log("Registered:sign fail")
+		returnData.Data = "Rankinfo:sign fail"
+		b, _ := json.Marshal(returnData)
+
+		w.Write([]byte(b))
+		return
+	}
+
+	id := _IDRankinfo{}
+
+	byteArray, _ := base64.StdEncoding.DecodeString(recvData.Data)
+	err = json.Unmarshal(byteArray, &id)
+	if err != nil {
+		returnData.Data = "Rankinfo:json unmarshal fail"
+		b, _ := json.Marshal(returnData)
+		w.Write([]byte(b))
+		return
+	}
+
+	info, err := mgodb.AlphaData.PlayerinfoAlpha(id.ID)
+	if err != nil {
+		msg.Log(err)
+		returnData.Data = "Playerinfo:not found"
+		b, _ := json.Marshal(returnData)
+		w.Write([]byte(b))
+		return
+	}
+
+	index, err := strconv.Atoi(id.Index)
+	if err != nil {
+		returnData.Data = "Rankinfo:activity index fail"
+		b, _ := json.Marshal(returnData)
+		w.Write([]byte(b))
+		return
+	}
+
+	rank, err := mgodb.AlphaData.RankinfoFromPlayer(index, info.CurrentId)
+	if err != nil {
+		returnData.Data = "Rankinfo:not found"
+		b, _ := json.Marshal(returnData)
+		w.Write([]byte(b))
+		return
+	}
+
+	returnData.data2Base64(rank)
+	returnData.setSignature(returnData.Data)
+
+	b, _ := json.Marshal(returnData)
+
+	w.Write([]byte(b))
+
 }
