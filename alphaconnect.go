@@ -69,8 +69,9 @@ func main() {
 
 // ReturnData 用來準備回傳資料使用
 type ReturnData struct {
-	Sign string `json:"Sign"`
-	Data string `json:"Data"`
+	Result int    `json:"Result"`
+	Sign   string `json:"Sign,omitempty"`
+	Data   string `json:"Data,omitempty"`
 }
 
 // AlphaKey 用來提供給 hmac 轉換，並驗證傳值的正確性
@@ -211,7 +212,8 @@ func Registered(w http.ResponseWriter, r *http.Request) {
 	err := json.Unmarshal(originSource, &recvData)
 	if err != nil {
 		msg.Log(err)
-		returnData.Data = "Registered:json unmarshal fail"
+		returnData.Result = -1
+		// returnData.Data = "Registered:json unmarshal fail"
 		b, _ := json.Marshal(returnData)
 		w.Write([]byte(b))
 		return
@@ -220,7 +222,8 @@ func Registered(w http.ResponseWriter, r *http.Request) {
 	// 簽章認證
 	if returnData.compareSignature(recvData.Sign, string(recvData.Data)) == false {
 		msg.Log("Registered:sign fail")
-		returnData.Data = "Registered:sign fail"
+		returnData.Result = -2
+		// returnData.Data = "Registered:sign fail"
 		b, _ := json.Marshal(returnData)
 		w.Write([]byte(b))
 		return
@@ -231,7 +234,8 @@ func Registered(w http.ResponseWriter, r *http.Request) {
 	byteArray, _ := base64.StdEncoding.DecodeString(recvData.Data)
 	err = json.Unmarshal(byteArray, &id)
 	if err != nil {
-		returnData.Data = "Registered:json unmarshal fail"
+		returnData.Result = -3
+		// returnData.Data = "Registered:json unmarshal fail"
 		b, _ := json.Marshal(returnData)
 		w.Write([]byte(b))
 		return
@@ -239,7 +243,8 @@ func Registered(w http.ResponseWriter, r *http.Request) {
 
 	currentID, err := returnData.decodeArmorID(id.ArmorID)
 	if err != nil {
-		returnData.Data = "Registered:igs id fail:" + err.Error()
+		returnData.Result = -4
+		// returnData.Data = "Registered:igs id fail:" + err.Error()
 		b, _ := json.Marshal(returnData)
 		w.Write([]byte(b))
 		return
@@ -248,8 +253,16 @@ func Registered(w http.ResponseWriter, r *http.Request) {
 	msg.Log("register current id:", currentID, ", alpha id:", id.AlphaID)
 	result := mgodb.AlphaData.Registered(currentID, id.AlphaID)
 
-	returnData.data2Base64(result.Error())
-	returnData.setSignature(returnData.Data)
+	if result.Error() == "build" {
+		returnData.Result = 0
+	} else if result.Error() == "replace" {
+		returnData.Result = 1
+	} else {
+		returnData.Result = -5
+		b, _ := json.Marshal(returnData)
+		w.Write([]byte(b))
+		return
+	}
 
 	b, _ := json.Marshal(returnData)
 
@@ -270,7 +283,8 @@ func PlayerinfoArmor(w http.ResponseWriter, r *http.Request) {
 	err := json.Unmarshal(originSource, &recvData)
 	if err != nil {
 		msg.Log(err)
-		returnData.Data = "Playerinfo:json unmarshal fail"
+		returnData.Result = -1
+		// returnData.Data = "Playerinfo:json unmarshal fail"
 		b, _ := json.Marshal(returnData)
 		w.Write([]byte(b))
 		return
@@ -279,7 +293,8 @@ func PlayerinfoArmor(w http.ResponseWriter, r *http.Request) {
 	// 簽章認證
 	if returnData.compareSignature(recvData.Sign, string(recvData.Data)) == false {
 		msg.Log("Registered:sign fail")
-		returnData.Data = "Playerinfo:sign fail"
+		returnData.Result = -2
+		// returnData.Data = "Playerinfo:sign fail"
 		b, _ := json.Marshal(returnData)
 
 		w.Write([]byte(b))
@@ -291,7 +306,8 @@ func PlayerinfoArmor(w http.ResponseWriter, r *http.Request) {
 	byteArray, _ := base64.StdEncoding.DecodeString(recvData.Data)
 	err = json.Unmarshal(byteArray, &id)
 	if err != nil {
-		returnData.Data = "Playerinfo:json unmarshal fail"
+		returnData.Result = -3
+		// returnData.Data = "Playerinfo:json unmarshal fail"
 		b, _ := json.Marshal(returnData)
 		w.Write([]byte(b))
 		return
@@ -302,7 +318,8 @@ func PlayerinfoArmor(w http.ResponseWriter, r *http.Request) {
 	if len(id.ID) != 12 { // 編碼不足12碼就表示資料錯誤
 		VerifyError = "1"
 		msg.Log("Verify:", VerifyError)
-		returnData.Data = "Playerinfo:igs id fail:" + VerifyError
+		returnData.Result = -4
+		// returnData.Data = "Playerinfo:igs id fail:" + VerifyError
 		b, _ := json.Marshal(returnData)
 		w.Write([]byte(b))
 		return
@@ -311,7 +328,8 @@ func PlayerinfoArmor(w http.ResponseWriter, r *http.Request) {
 	// 編碼轉換
 	currentID, err := returnData.decodeArmorID(id.ID)
 	if err != nil {
-		returnData.Data = "Playerinfo:igs id fail:" + err.Error()
+		returnData.Result = -5
+		// returnData.Data = "Playerinfo:igs id fail:" + err.Error()
 		b, _ := json.Marshal(returnData)
 		w.Write([]byte(b))
 		return
@@ -321,12 +339,14 @@ func PlayerinfoArmor(w http.ResponseWriter, r *http.Request) {
 	info, err := mgodb.AlphaData.PlayerinfoArmor(currentID)
 
 	if err != nil {
-		returnData.Data = "Playerinfo:not found"
+		returnData.Result = -6
+		// returnData.Data = "Playerinfo:not found"
 		b, _ := json.Marshal(returnData)
 		w.Write([]byte(b))
 		return
 	}
 
+	returnData.Result = 0
 	returnData.data2Base64(info)
 	returnData.setSignature(returnData.Data)
 
@@ -349,7 +369,8 @@ func PlayerinfoAlpha(w http.ResponseWriter, r *http.Request) {
 	err := json.Unmarshal(originSource, &recvData)
 	if err != nil {
 		msg.Log(err)
-		returnData.Data = "Playerinfo:json unmarshal fail"
+		returnData.Result = -1
+		// returnData.Data = "Playerinfo:json unmarshal fail"
 		b, _ := json.Marshal(returnData)
 		w.Write([]byte(b))
 		return
@@ -358,7 +379,8 @@ func PlayerinfoAlpha(w http.ResponseWriter, r *http.Request) {
 	// 簽章認證
 	if returnData.compareSignature(recvData.Sign, string(recvData.Data)) == false {
 		msg.Log("Registered:sign fail")
-		returnData.Data = "Playerinfo:sign fail"
+		returnData.Result = -2
+		// returnData.Data = "Playerinfo:sign fail"
 		b, _ := json.Marshal(returnData)
 
 		w.Write([]byte(b))
@@ -370,7 +392,8 @@ func PlayerinfoAlpha(w http.ResponseWriter, r *http.Request) {
 	byteArray, _ := base64.StdEncoding.DecodeString(recvData.Data)
 	err = json.Unmarshal(byteArray, &id)
 	if err != nil {
-		returnData.Data = "Playerinfo:json unmarshal fail"
+		returnData.Result = -3
+		// returnData.Data = "Playerinfo:json unmarshal fail"
 		b, _ := json.Marshal(returnData)
 		w.Write([]byte(b))
 		return
@@ -381,12 +404,14 @@ func PlayerinfoAlpha(w http.ResponseWriter, r *http.Request) {
 	info, err := mgodb.AlphaData.PlayerinfoAlpha(id.ID)
 	if err != nil {
 		msg.Log(err)
-		returnData.Data = "Playerinfo:not found"
+		returnData.Result = -4
+		// returnData.Data = "Playerinfo:not found"
 		b, _ := json.Marshal(returnData)
 		w.Write([]byte(b))
 		return
 	}
 
+	returnData.Result = 0
 	returnData.data2Base64(info)
 	returnData.setSignature(returnData.Data)
 
@@ -409,7 +434,8 @@ func Rankinfo(w http.ResponseWriter, r *http.Request) {
 	err := json.Unmarshal(originSource, &recvData)
 	if err != nil {
 		msg.Log(err)
-		returnData.Data = "Rankinfo:json unmarshal fail"
+		returnData.Result = -1
+		// returnData.Data = "Rankinfo:json unmarshal fail"
 		b, _ := json.Marshal(returnData)
 		w.Write([]byte(b))
 		return
@@ -418,7 +444,8 @@ func Rankinfo(w http.ResponseWriter, r *http.Request) {
 	// 簽章認證
 	if returnData.compareSignature(recvData.Sign, string(recvData.Data)) == false {
 		msg.Log("Registered:sign fail")
-		returnData.Data = "Rankinfo:sign fail"
+		returnData.Result = -2
+		// returnData.Data = "Rankinfo:sign fail"
 		b, _ := json.Marshal(returnData)
 
 		w.Write([]byte(b))
@@ -430,7 +457,8 @@ func Rankinfo(w http.ResponseWriter, r *http.Request) {
 	byteArray, _ := base64.StdEncoding.DecodeString(recvData.Data)
 	err = json.Unmarshal(byteArray, &id)
 	if err != nil {
-		returnData.Data = "Rankinfo:json unmarshal fail"
+		returnData.Result = -3
+		// returnData.Data = "Rankinfo:json unmarshal fail"
 		b, _ := json.Marshal(returnData)
 		w.Write([]byte(b))
 		return
@@ -438,7 +466,8 @@ func Rankinfo(w http.ResponseWriter, r *http.Request) {
 
 	index, err := strconv.Atoi(id.ID)
 	if err != nil {
-		returnData.Data = "Rankinfo:activity id fail"
+		returnData.Result = -4
+		// returnData.Data = "Rankinfo:activity id fail"
 		b, _ := json.Marshal(returnData)
 		w.Write([]byte(b))
 		return
@@ -447,13 +476,15 @@ func Rankinfo(w http.ResponseWriter, r *http.Request) {
 	msg.Log("search ranking index:", index)
 	rank, err := mgodb.AlphaData.Rankinfo(index)
 	if err != nil {
-		returnData.Data = "Rankinfo:not found"
+		returnData.Result = -5
+		// returnData.Data = "Rankinfo:not found"
 		b, _ := json.Marshal(returnData)
 		w.Write([]byte(b))
 
 		return
 	}
 
+	returnData.Result = 0
 	returnData.data2Base64(rank)
 	returnData.setSignature(returnData.Data)
 
@@ -474,7 +505,8 @@ func RankinfoArmor(w http.ResponseWriter, r *http.Request) {
 	err := json.Unmarshal(originSource, &recvData)
 	if err != nil {
 		msg.Log(err)
-		returnData.Data = "Rankinfo:json unmarshal fail"
+		returnData.Result = -1
+		// returnData.Data = "Rankinfo:json unmarshal fail"
 		b, _ := json.Marshal(returnData)
 		w.Write([]byte(b))
 		return
@@ -483,7 +515,8 @@ func RankinfoArmor(w http.ResponseWriter, r *http.Request) {
 	// 簽章認證
 	if returnData.compareSignature(recvData.Sign, string(recvData.Data)) == false {
 		msg.Log("Registered:sign fail")
-		returnData.Data = "Rankinfo:sign fail"
+		returnData.Result = -2
+		// returnData.Data = "Rankinfo:sign fail"
 		b, _ := json.Marshal(returnData)
 
 		w.Write([]byte(b))
@@ -495,7 +528,8 @@ func RankinfoArmor(w http.ResponseWriter, r *http.Request) {
 	byteArray, _ := base64.StdEncoding.DecodeString(recvData.Data)
 	err = json.Unmarshal(byteArray, &id)
 	if err != nil {
-		returnData.Data = "Rankinfo:json unmarshal fail"
+		returnData.Result = -3
+		// returnData.Data = "Rankinfo:json unmarshal fail"
 		b, _ := json.Marshal(returnData)
 		w.Write([]byte(b))
 		return
@@ -503,7 +537,8 @@ func RankinfoArmor(w http.ResponseWriter, r *http.Request) {
 
 	currentID, err := returnData.decodeArmorID(id.ID)
 	if err != nil {
-		returnData.Data = "Rankinfo:igs id decode fail:" + err.Error()
+		returnData.Result = -4
+		// returnData.Data = "Rankinfo:igs id decode fail:" + err.Error()
 		b, _ := json.Marshal(returnData)
 		w.Write([]byte(b))
 		return
@@ -511,7 +546,8 @@ func RankinfoArmor(w http.ResponseWriter, r *http.Request) {
 
 	index, err := strconv.Atoi(id.Index)
 	if err != nil {
-		returnData.Data = "Rankinfo:activity index fail"
+		returnData.Result = -5
+		// returnData.Data = "Rankinfo:activity index fail"
 		b, _ := json.Marshal(returnData)
 		w.Write([]byte(b))
 		return
@@ -519,12 +555,14 @@ func RankinfoArmor(w http.ResponseWriter, r *http.Request) {
 
 	rank, err := mgodb.AlphaData.RankinfoFromPlayer(index, int64(currentID))
 	if err != nil {
-		returnData.Data = "Rankinfo:not found"
+		returnData.Result = -6
+		// returnData.Data = "Rankinfo:not found"
 		b, _ := json.Marshal(returnData)
 		w.Write([]byte(b))
 		return
 	}
 
+	returnData.Result = 0
 	returnData.data2Base64(rank)
 	returnData.setSignature(returnData.Data)
 
@@ -546,7 +584,8 @@ func RankinfoAlpha(w http.ResponseWriter, r *http.Request) {
 	err := json.Unmarshal(originSource, &recvData)
 	if err != nil {
 		msg.Log(err)
-		returnData.Data = "Rankinfo:json unmarshal fail"
+		returnData.Result = -1
+		// returnData.Data = "Rankinfo:json unmarshal fail"
 		b, _ := json.Marshal(returnData)
 		w.Write([]byte(b))
 		return
@@ -555,7 +594,8 @@ func RankinfoAlpha(w http.ResponseWriter, r *http.Request) {
 	// 簽章認證
 	if returnData.compareSignature(recvData.Sign, string(recvData.Data)) == false {
 		msg.Log("Registered:sign fail")
-		returnData.Data = "Rankinfo:sign fail"
+		returnData.Result = -2
+		// returnData.Data = "Rankinfo:sign fail"
 		b, _ := json.Marshal(returnData)
 
 		w.Write([]byte(b))
@@ -567,7 +607,8 @@ func RankinfoAlpha(w http.ResponseWriter, r *http.Request) {
 	byteArray, _ := base64.StdEncoding.DecodeString(recvData.Data)
 	err = json.Unmarshal(byteArray, &id)
 	if err != nil {
-		returnData.Data = "Rankinfo:json unmarshal fail"
+		returnData.Result = -3
+		// returnData.Data = "Rankinfo:json unmarshal fail"
 		b, _ := json.Marshal(returnData)
 		w.Write([]byte(b))
 		return
@@ -576,7 +617,8 @@ func RankinfoAlpha(w http.ResponseWriter, r *http.Request) {
 	info, err := mgodb.AlphaData.PlayerinfoAlpha(id.ID)
 	if err != nil {
 		msg.Log(err)
-		returnData.Data = "Playerinfo:not found"
+		returnData.Result = -4
+		// returnData.Data = "Playerinfo:not found"
 		b, _ := json.Marshal(returnData)
 		w.Write([]byte(b))
 		return
@@ -584,7 +626,8 @@ func RankinfoAlpha(w http.ResponseWriter, r *http.Request) {
 
 	index, err := strconv.Atoi(id.Index)
 	if err != nil {
-		returnData.Data = "Rankinfo:activity index fail"
+		returnData.Result = -5
+		// returnData.Data = "Rankinfo:activity index fail"
 		b, _ := json.Marshal(returnData)
 		w.Write([]byte(b))
 		return
@@ -592,12 +635,14 @@ func RankinfoAlpha(w http.ResponseWriter, r *http.Request) {
 
 	rank, err := mgodb.AlphaData.RankinfoFromPlayer(index, info.CurrentId)
 	if err != nil {
-		returnData.Data = "Rankinfo:not found"
+		returnData.Result = -6
+		// returnData.Data = "Rankinfo:not found"
 		b, _ := json.Marshal(returnData)
 		w.Write([]byte(b))
 		return
 	}
 
+	returnData.Result = 0
 	returnData.data2Base64(rank)
 	returnData.setSignature(returnData.Data)
 
