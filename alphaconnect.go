@@ -333,7 +333,7 @@ func PlayerinfoArmor(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	msg.Log("search player id:", currentID)
+	msg.Log("search armor player id:", currentID)
 	info, err := mgodb.AlphaData.PlayerinfoArmor(currentID)
 
 	if err != nil {
@@ -401,7 +401,7 @@ func PlayerinfoAlpha(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	msg.Log("search alpha id:", id.ID)
+	msg.Log("search alpha player id:", id.ID)
 
 	info, err := mgodb.AlphaData.PlayerinfoAlpha(id.ID)
 	if err != nil {
@@ -555,6 +555,8 @@ func RankinfoArmor(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	msg.Log("search armor player id:", currentID)
+
 	index, err := strconv.Atoi(id.Index)
 	if err != nil {
 		returnData.Result = -5
@@ -629,6 +631,8 @@ func RankinfoAlpha(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	msg.Log("search alpha player id:", id.ID)
+
 	info, err := mgodb.AlphaData.PlayerinfoAlpha(id.ID)
 	if err != nil {
 		msg.Log(err)
@@ -639,6 +643,8 @@ func RankinfoAlpha(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(b))
 		return
 	}
+
+	msg.Log("get armor player id:", info.CurrentId)
 
 	index, err := strconv.Atoi(id.Index)
 	if err != nil {
