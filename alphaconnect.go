@@ -51,8 +51,8 @@ func main() {
 		http.HandleFunc("/Playerinfo_Alpha", PlayerinfoAlpha)
 		http.HandleFunc("/Playerinfo_Armor", PlayerinfoArmor)
 		http.HandleFunc("/Rankinfo", Rankinfo)
-		http.HandleFunc("/RankinfoArmor", RankinfoArmor)
-		http.HandleFunc("/RankinfoAlpha", RankinfoAlpha)
+		http.HandleFunc("/Rankinfo_Armor", RankinfoArmor)
+		http.HandleFunc("/Rankinfo_Alpha", RankinfoAlpha)
 		http.HandleFunc("/PlayerGameList", PlayerGameList)
 
 		//取得個人資料(以下2個是要取代 Playerinfo_Alpha,Playerinfo_Armor,但舊的先不能刪除,主要目前奧飛有使用到)
@@ -498,9 +498,16 @@ func RankinfoArmor(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rank, err := mgodb.AlphaData.RankinfoFromPlayer(index, int64(currentID))
+	msg.Log("search armor player id:", currentID)
+	info, err := mgodb.AlphaData.PlayerinfoArmor(currentID)
 	if err != nil {
-		returnData.errorMessage(w, -6, "Rankinfo:not found")
+		returnData.errorMessage(w, -6, "Playerinfo:not found")
+		return
+	}
+
+	rank, err := mgodb.AlphaData.RankinfoFromPlayer(index, info.CreateId)
+	if err != nil {
+		returnData.errorMessage(w, -7, "Rankinfo:not found")
 		return
 	}
 
