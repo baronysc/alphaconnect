@@ -501,7 +501,7 @@ func RankinfoArmor(w http.ResponseWriter, r *http.Request) {
 	msg.Log("search armor player id:", currentID)
 	info, err := mgodb.AlphaData.PlayerinfoArmor(currentID)
 	if err != nil {
-		returnData.errorMessage(w, -6, "Playerinfo:not found")
+		returnData.errorMessage(w, -6, "Rankinfo:not found")
 		return
 	}
 
