@@ -48,11 +48,16 @@ func main() {
 	go func() {
 		http.HandleFunc("/", JokeBack)
 		http.HandleFunc("/Registered", Registered)
+		http.HandleFunc("/RegisteredStatus", RegisteredStatus)
 		http.HandleFunc("/Playerinfo_Alpha", PlayerinfoAlpha)
 		http.HandleFunc("/Playerinfo_Armor", PlayerinfoArmor)
+		http.HandleFunc("/ActivityStatus", ActivityStatus)
 		http.HandleFunc("/Rankinfo", Rankinfo)
 		http.HandleFunc("/Rankinfo_Armor", RankinfoArmor)
 		http.HandleFunc("/Rankinfo_Alpha", RankinfoAlpha)
+
+		http.HandleFunc("/StoreList", StoreList)
+
 		http.HandleFunc("/PlayerGameList", PlayerGameList)
 
 		//取得個人資料(以下2個是要取代 Playerinfo_Alpha,Playerinfo_Armor,但舊的先不能刪除,主要目前奧飛有使用到)
@@ -201,8 +206,7 @@ type _ServerSayHello struct {
 	ClientIP string `json:"ClientIP"`
 }
 
-// JokeBack 用來給 client 直接讀取判斷 ip 使用
-func JokeBack(w http.ResponseWriter, r *http.Request) {
+func getIP(r *http.Request) string {
 
 	clientIP := r.Header.Get("x-forwarded-for")
 
@@ -210,8 +214,14 @@ func JokeBack(w http.ResponseWriter, r *http.Request) {
 		clientIP = r.RemoteAddr
 	}
 
+	return clientIP
+}
+
+// JokeBack 用來給 client 直接讀取判斷 ip 使用
+func JokeBack(w http.ResponseWriter, r *http.Request) {
+
 	content := _ServerSayHello{
-		ClientIP: clientIP,
+		ClientIP: getIP(r),
 	}
 
 	b, _ := json.Marshal(content)
@@ -241,7 +251,7 @@ type _RecvData struct {
 func Registered(w http.ResponseWriter, r *http.Request) {
 
 	msg.Log("Provide alpha registered ")
-	msg.Log("From:", r.RemoteAddr)
+	msg.Log("From:", getIP(r))
 
 	returnData := ReturnData{}
 
@@ -294,11 +304,60 @@ func Registered(w http.ResponseWriter, r *http.Request) {
 
 }
 
+// RegisteredStatus 用來給 client 註冊奧飛通行證資料
+func RegisteredStatus(w http.ResponseWriter, r *http.Request) {
+
+	msg.Log("Provide alpha registered status")
+	msg.Log("From:", getIP(r))
+
+	returnData := ReturnData{}
+
+	originSource, _ := ioutil.ReadAll(r.Body)
+
+	recvData := _RecvData{}
+	err := json.Unmarshal(originSource, &recvData)
+	if err != nil {
+		msg.Log(err)
+		returnData.errorMessage(w, -1, "RegisteredStatus:json unmarshal fail")
+		return
+	}
+
+	// 簽章認證
+	if returnData.compareSignature(recvData.Sign, string(recvData.Data)) == false {
+		returnData.errorMessage(w, -2, "RegisteredStatus:sign fail")
+		return
+	}
+
+	id := _ID{}
+
+	byteArray, _ := base64.StdEncoding.DecodeString(recvData.Data)
+	err = json.Unmarshal(byteArray, &id)
+	if err != nil {
+		returnData.errorMessage(w, -3, "RegisteredStatus:json unmarshal fail")
+		return
+	}
+
+	msg.Log("register current alpha id:", id.ID)
+
+	_, err = mgodb.AlphaData.PlayerinfoAlpha(id.ID)
+	if err != nil {
+		returnData.errorMessage(w, -4, "RegisteredStatus:not found")
+		return
+	}
+
+	returnData.Result = 0
+
+	b, _ := json.Marshal(returnData)
+
+	w.Write([]byte(b))
+
+}
+
 // PlayerinfoArmor 用來給 client 直接讀玩家資料使用
 func PlayerinfoArmor(w http.ResponseWriter, r *http.Request) {
 
-	msg.Log("Provide alpha search playerinfot from Armor account")
-	msg.Log("From:", r.RemoteAddr)
+	msg.Log("Provide alpha search playerinfo from Armor account")
+	msg.Log("From:", getIP(r))
 
 	returnData := ReturnData{}
 
@@ -355,7 +414,7 @@ func PlayerinfoArmor(w http.ResponseWriter, r *http.Request) {
 func PlayerinfoAlpha(w http.ResponseWriter, r *http.Request) {
 
 	msg.Log("Provide alpha search playerinfo from Alpha account")
-	msg.Log("From:", r.RemoteAddr)
+	msg.Log("From:", getIP(r))
 
 	returnData := ReturnData{}
 
@@ -403,11 +462,50 @@ func PlayerinfoAlpha(w http.ResponseWriter, r *http.Request) {
 
 }
 
+// ActivityInfo 活動資料
+type ActivityInfo struct {
+	ID    int64  `json:"id"`
+	Name  string `json:"name"`
+	Start int64  `json:"start"`
+	End   int64  `json:"end"`
+}
+
+// ActivityStatus 用來給 client 直接讀取排名資料使用
+func ActivityStatus(w http.ResponseWriter, r *http.Request) {
+
+	msg.Log("Provide alpha search activity information")
+	msg.Log("From:", getIP(r))
+
+	returnData := ReturnData{}
+	ContentInfo := mgodb.AlphaData.ActivityStatus()
+
+	if ContentInfo.Open == false {
+		returnData.errorMessage(w, -1, "ActivityStatus:no acticity")
+		return
+	}
+
+	info := ActivityInfo{
+		ID:    ContentInfo.Item,
+		Name:  ContentInfo.Title,
+		Start: ContentInfo.Start,
+		End:   ContentInfo.End,
+	}
+
+	returnData.Result = 0
+	returnData.data2Base64(info)
+	returnData.setSignature(returnData.Data)
+
+	b, _ := json.Marshal(returnData)
+
+	w.Write([]byte(b))
+
+}
+
 // Rankinfo 用來給 client 直接讀取排名資料使用
 func Rankinfo(w http.ResponseWriter, r *http.Request) {
 
 	msg.Log("Provide alpha search ranking data")
-	msg.Log("From:", r.RemoteAddr)
+	msg.Log("From:", getIP(r))
 
 	returnData := ReturnData{}
 
@@ -462,7 +560,7 @@ func Rankinfo(w http.ResponseWriter, r *http.Request) {
 func RankinfoArmor(w http.ResponseWriter, r *http.Request) {
 
 	msg.Log("Provide alpha search player rank for armor id")
-	msg.Log("From:", r.RemoteAddr)
+	msg.Log("From:", getIP(r))
 
 	returnData := ReturnData{}
 
@@ -530,7 +628,7 @@ func RankinfoArmor(w http.ResponseWriter, r *http.Request) {
 func RankinfoAlpha(w http.ResponseWriter, r *http.Request) {
 
 	msg.Log("Provide alpha search player rank for alpha id")
-	msg.Log("From:", r.RemoteAddr)
+	msg.Log("From:", getIP(r))
 
 	returnData := ReturnData{}
 
@@ -592,11 +690,35 @@ func RankinfoAlpha(w http.ResponseWriter, r *http.Request) {
 
 }
 
+// StoreList 提供給奧飛取得店家機台資料
+func StoreList(w http.ResponseWriter, r *http.Request) {
+
+	msg.Log("Provide alpha search store information")
+	msg.Log("From:", getIP(r))
+
+	returnData := ReturnData{}
+
+	totalList := mgodb.AlphaData.StoreList()
+	if totalList == nil {
+		returnData.errorMessage(w, -1, "StoreList:not found")
+		return
+	}
+
+	returnData.Result = 0
+	returnData.data2Base64(totalList)
+	returnData.setSignature(returnData.Data)
+
+	b, _ := json.Marshal(returnData)
+
+	w.Write([]byte(b))
+
+}
+
 // PlayerGameList 用來給 client 依玩家資料取排名使用
 func PlayerGameList(w http.ResponseWriter, r *http.Request) {
 
 	msg.Log("Provide search player game list for armor id")
-	msg.Log("From:", r.RemoteAddr)
+	msg.Log("From:", getIP(r))
 
 	returnData := ReturnData{}
 
