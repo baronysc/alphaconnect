@@ -204,8 +204,14 @@ type _ServerSayHello struct {
 // JokeBack 用來給 client 直接讀取判斷 ip 使用
 func JokeBack(w http.ResponseWriter, r *http.Request) {
 
+	clientIP := r.Header.Get("x-forwarded-for")
+
+	if clientIP == "" {
+		clientIP = r.RemoteAddr
+	}
+
 	content := _ServerSayHello{
-		ClientIP: r.RemoteAddr,
+		ClientIP: clientIP,
 	}
 
 	b, _ := json.Marshal(content)
