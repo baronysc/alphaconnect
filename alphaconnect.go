@@ -51,7 +51,10 @@ func main() {
 		http.HandleFunc("/RegisteredStatus", RegisteredStatus)
 		http.HandleFunc("/Playerinfo_Alpha", PlayerinfoAlpha)
 		http.HandleFunc("/Playerinfo_Armor", PlayerinfoArmor)
+
 		http.HandleFunc("/ActivityStatus", ActivityStatus)
+		http.HandleFunc("/ActivityList", ActivityList)
+
 		http.HandleFunc("/Rankinfo", Rankinfo)
 		http.HandleFunc("/Rankinfo_Armor", RankinfoArmor)
 		http.HandleFunc("/Rankinfo_Alpha", RankinfoAlpha)
@@ -493,6 +496,43 @@ func ActivityStatus(w http.ResponseWriter, r *http.Request) {
 
 	returnData.Result = 0
 	returnData.data2Base64(info)
+	returnData.setSignature(returnData.Data)
+
+	b, _ := json.Marshal(returnData)
+
+	w.Write([]byte(b))
+
+}
+
+// ActivityList 用來給 client 直接讀取排名資料使用
+func ActivityList(w http.ResponseWriter, r *http.Request) {
+
+	msg.Log("Provide alpha search activity information")
+	msg.Log("From:", getIP(r))
+
+	returnData := ReturnData{}
+	activityLists := mgodb.AlphaData.ActivityList()
+	if activityLists == nil {
+		returnData.errorMessage(w, -1, "ActivityList:no acticity")
+		return
+	}
+
+	var totalLists []ActivityInfo
+
+	for _, a := range activityLists {
+
+		info := ActivityInfo{
+			ID:    int64(a.GetItem()),
+			Name:  a.GetTitle(),
+			Start: a.GetData()[0].GetStart(),
+			End:   a.GetData()[0].GetEnd(),
+		}
+
+		totalLists = append(totalLists, info)
+	}
+
+	returnData.Result = 0
+	returnData.data2Base64(totalLists)
 	returnData.setSignature(returnData.Data)
 
 	b, _ := json.Marshal(returnData)

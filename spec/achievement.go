@@ -1,7 +1,7 @@
 package spec
 
 //arr[0]    --遊玩次數(A01)
-//arr[1]    --未定
+//arr[1]    --英勇瞬間
 //arr[2]    --發動復活成功次數(A03)
 //arr[3]    --完美提升鬥志次數(A04)
 //arr[4]    --發動暴擊次數(A05)
@@ -10,13 +10,13 @@ package spec
 
 //AchievementData 逹成成就
 type AchievementData struct {
-	A01 int32 `json:"A01"`           //遊玩次數
-	A02 int32 `json:"A02,omitempty"` //未定,所以不傳
-	A03 int32 `json:"A03"`           //發動復活成功次數
-	A04 int32 `json:"A04"`           //完美提升鬥志次數
-	A05 int32 `json:"A05"`           //發動暴擊次數
-	A06 int32 `json:"A06"`           //發動幸運次數
-	A07 int32 `json:"A07"`           //發動必殺技次數
+	A01 int32 `json:"A01"` //遊玩次數
+	A02 int32 `json:"A02"` //英勇瞬間(第2彈才會有的)
+	A03 int32 `json:"A03"` //發動復活成功次數
+	A04 int32 `json:"A04"` //完美提升鬥志次數
+	A05 int32 `json:"A05"` //發動暴擊次數
+	A06 int32 `json:"A06"` //發動幸運次數
+	A07 int32 `json:"A07"` //發動必殺技次數
 }
 
 /*

@@ -60,11 +60,12 @@ var expTable = `[
 	]`
 
 type ExpData struct {
-	FA  float32 `json:"FA"`
-	SKL float32 `json:"SKL"`
-	SPD float32 `json:"SPD"`
-	ATK float32 `json:"ATK"`
-	DEF float32 `json:"DEF"`
+	FA    float32 `json:"FA"`
+	SKL   float32 `json:"SKL"`
+	SPD   float32 `json:"SPD"`
+	ATK   float32 `json:"ATK"`
+	DEF   float32 `json:"DEF"`
+	Total int32   `json:"Total"`
 	//Type6 float32 `json:"Type6,omitempty"`
 	//Type7 float32 `json:"Type7,omitempty"`
 }
@@ -114,6 +115,7 @@ func GetAllLevel(e1 int32, e2 int32, e3 int32, e4 int32, e5 int32, e6 int32, e7 
 	e.SPD, _ = GetLevel(int(e3))
 	e.ATK, _ = GetLevel(int(e4))
 	e.DEF, _ = GetLevel(int(e5))
+	e.Total = int32(e.FA) + int32(e.SKL) + int32(e.SPD) + int32(e.ATK) + int32(e.DEF) - 4
 	//e.Type6, _ = GetLevel(int(l5))
 	//e.Type7, _ = GetLevel(int(l5))
 	return e

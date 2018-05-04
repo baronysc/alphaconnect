@@ -19,6 +19,7 @@ type recvID struct {
 type PlayerData struct {
 	Name            string               `json:"name"`
 	CreateTime      int64                `json:"createTime"`
+	RegisteredTime  int64                `json:"registeredTime"`
 	LastTime        int64                `json:"lastTime"`
 	InheritCnt      int32                `json:"inheritCnt"`
 	ExpData         spec.ExpData         `json:"expData"`
@@ -126,6 +127,8 @@ func GetPlayerData(info *mgodb.G_PlayerInfo) []byte {
 	pd.CreateTime = info.RFIDCardData.AccountData.CreateTime
 	pd.LastTime = info.LastOnLineTime
 	pd.InheritCnt = info.RFIDCardData.AccountData.InheritCount
+	pd.RegisteredTime = info.RegisteredTime
+
 	//寫入經驗值
 	e1 := info.RFIDCardData.GetExpData().GetType1()
 	e2 := info.RFIDCardData.GetExpData().GetType2()
