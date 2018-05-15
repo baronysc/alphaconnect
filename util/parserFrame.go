@@ -19,25 +19,25 @@ type respFrame struct {
 	Message string `json:"Message,omitempty"`
 }
 
-//ParserFrame 解析框
-func ParserFrame(data []byte, key string) ([]byte, error) {
+//ParserFrame 解析框,回傳最後的參數是 errcode
+func ParserFrame(data []byte, key string) ([]byte, error, int) {
 	var err error
 	recv := recvFrame{}
 	err = json.Unmarshal(data, &recv)
 	if err != nil {
-		return nil, err
+		return nil, err, -1
 	}
 
 	if !CompareSign(key, recv.Sign, recv.Data) {
 		err = errors.New("key Comparison error")
-		return nil, err
+		return nil, err, -2
 	}
 
 	jdata, err := base64.StdEncoding.DecodeString(recv.Data)
 	if err != nil {
-		return nil, err
+		return nil, err, -3
 	}
-	return jdata, err
+	return jdata, err, 0
 }
 
 //CombineFrame 組合框

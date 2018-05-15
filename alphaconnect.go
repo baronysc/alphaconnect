@@ -66,6 +66,7 @@ func main() {
 		//取得個人資料(以下2個是要取代 Playerinfo_Alpha,Playerinfo_Armor,但舊的先不能刪除,主要目前奧飛有使用到)
 		http.HandleFunc("/PlayerData_Armor", proc.HandlerPlayerDataArmor)
 		http.HandleFunc("/PlayerData_Alpha", proc.HandlerPlayerDataAlpha)
+		http.HandleFunc("/PlayerData_CreateID", proc.HandlerPlayerDataCreateID)
 
 		startListen <- true
 		fmt.Println("start listen")
@@ -384,7 +385,7 @@ func PlayerinfoArmor(w http.ResponseWriter, r *http.Request) {
 	byteArray, _ := base64.StdEncoding.DecodeString(recvData.Data)
 	err = json.Unmarshal(byteArray, &id)
 	if err != nil {
-		returnData.errorMessage(w, -3, "Playerinfo:json unmarshal fail")
+		returnData.errorMessage(w, -3, "Playerinfo:base 64 json unmarshal fail")
 		return
 	}
 
@@ -443,7 +444,7 @@ func PlayerinfoAlpha(w http.ResponseWriter, r *http.Request) {
 	byteArray, _ := base64.StdEncoding.DecodeString(recvData.Data)
 	err = json.Unmarshal(byteArray, &id)
 	if err != nil {
-		returnData.errorMessage(w, -3, "Playerinfo:json unmarshal fail")
+		returnData.errorMessage(w, -3, "Playerinfo:base 64 json unmarshal fail")
 		return
 	}
 
@@ -451,7 +452,7 @@ func PlayerinfoAlpha(w http.ResponseWriter, r *http.Request) {
 
 	info, err := mgodb.AlphaData.PlayerinfoAlpha(id.ID)
 	if err != nil {
-		returnData.errorMessage(w, -4, "Playerinfo:not found")
+		returnData.errorMessage(w, -5, "Playerinfo:not found")
 		return
 	}
 

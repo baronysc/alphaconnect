@@ -9,6 +9,7 @@ import (
 	"log"
 	"mgodb"
 	"net/http"
+	"strconv"
 )
 
 type recvID struct {
@@ -20,6 +21,7 @@ type PlayerData struct {
 	Name            string               `json:"name"`
 	CreateTime      int64                `json:"createTime"`
 	RegisteredTime  int64                `json:"registeredTime"`
+	AlphaID         string               `json:"alphaID"`
 	LastTime        int64                `json:"lastTime"`
 	InheritCnt      int32                `json:"inheritCnt"`
 	ExpData         spec.ExpData         `json:"expData"`
@@ -42,9 +44,9 @@ func HandlerPlayerDataArmor(w http.ResponseWriter, r *http.Request) {
 	var playerData []byte        //要回傳的玩家資料
 	var rID recvID               //取出玩家ID
 
-	recvJSON, err := util.ParserFrame(originSource, noti.AlphaKey)
+	recvJSON, err, errcode := util.ParserFrame(originSource, noti.AlphaKey)
 	if err != nil {
-		respData = util.FailFrame(-1, err)
+		respData = util.FailFrame(errcode, err)
 		goto L
 	}
 
@@ -56,13 +58,67 @@ func HandlerPlayerDataArmor(w http.ResponseWriter, r *http.Request) {
 
 	currentID, err = util.CheckArmorID(rID.ID)
 	if err != nil {
-		respData = util.FailFrame(-1, err)
+		respData = util.FailFrame(-4, err)
 		goto L
 	}
 
 	info, err = mgodb.AlphaData.PlayerinfoArmor(currentID)
 	if err != nil {
+		respData = util.FailFrame(-5, err)
+		goto L
+	}
+
+	playerData = GetPlayerData(info)
+	respData = util.CombineFrame(playerData, noti.AlphaKey, 0, "")
+
+L:
+	w.Write(respData)
+}
+
+// HandlerPlayerDataArmor 處理個人資料
+func HandlerPlayerDataCreateID(w http.ResponseWriter, r *http.Request) {
+	originSource, _ := ioutil.ReadAll(r.Body)
+	log.Println("接收到 PlayerDataArmor 請求:" + string(originSource))
+	//log.Printf("origin:%v\n", string(originSource))
+
+	//先做變數的宣告(如果使用GOTO 不能在 GOTO以下使用臨時變數)
+	var recvJSON []byte          //接收後去框資料
+	var respData []byte          //回傳資料
+	var createID int             //玩家目前ID
+	var info *mgodb.G_PlayerInfo //從 DB取出的資料
+	var playerData []byte        //要回傳的玩家資料
+	var rID recvID               //取出玩家ID
+
+	recvJSON, err, errcode := util.ParserFrame(originSource, noti.AlphaKey)
+	if err != nil {
+		respData = util.FailFrame(errcode, err)
+		goto L
+	}
+
+	err = json.Unmarshal(recvJSON, &rID)
+	if err != nil {
 		respData = util.FailFrame(-1, err)
+		goto L
+	}
+
+	log.Println(rID.ID)
+	createID, err = strconv.Atoi(rID.ID)
+	if err != nil {
+		respData = util.FailFrame(-4, err)
+		goto L
+	}
+
+	/*
+		createID, err = util.CheckrAmorID(rID.ID)
+		if err != nil {
+			respData = util.FailFrame(-1, err)
+			goto L
+		}
+	*/
+
+	info, err = mgodb.AlphaData.PlayerinfoCreateID(createID)
+	if err != nil {
+		respData = util.FailFrame(-5, err)
 		goto L
 	}
 
@@ -86,9 +142,9 @@ func HandlerPlayerDataAlpha(w http.ResponseWriter, r *http.Request) {
 	var playerData []byte        //要回傳的玩家資料
 	var rID recvID               //取出玩家ID
 
-	recvJSON, err := util.ParserFrame(originSource, noti.AlphaKey)
+	recvJSON, err, errcode := util.ParserFrame(originSource, noti.AlphaKey)
 	if err != nil {
-		respData = util.FailFrame(-1, err)
+		respData = util.FailFrame(errcode, err)
 		goto L
 	}
 
@@ -100,7 +156,7 @@ func HandlerPlayerDataAlpha(w http.ResponseWriter, r *http.Request) {
 
 	err = json.Unmarshal(recvJSON, &rID)
 	if err != nil {
-		respData = util.FailFrame(-1, err)
+		respData = util.FailFrame(-4, err)
 		goto L
 	}
 
@@ -108,7 +164,7 @@ func HandlerPlayerDataAlpha(w http.ResponseWriter, r *http.Request) {
 	alphaID = rID.ID
 	info, err = mgodb.AlphaData.PlayerinfoAlpha(alphaID)
 	if err != nil {
-		respData = util.FailFrame(-1, err)
+		respData = util.FailFrame(-5, err)
 		goto L
 	}
 
@@ -128,6 +184,7 @@ func GetPlayerData(info *mgodb.G_PlayerInfo) []byte {
 	pd.LastTime = info.LastOnLineTime
 	pd.InheritCnt = info.RFIDCardData.AccountData.InheritCount
 	pd.RegisteredTime = info.RegisteredTime
+	pd.AlphaID = info.AlphaID
 
 	//寫入經驗值
 	e1 := info.RFIDCardData.GetExpData().GetType1()
