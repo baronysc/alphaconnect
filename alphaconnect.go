@@ -284,6 +284,7 @@ func Registered(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	msg.Log("register id:", id.ArmorID)
 	currentID, err := returnData.decodeArmorID(id.ArmorID)
 	if err != nil {
 		returnData.errorMessage(w, -4, "Registered:igs id fail, "+err.Error())
@@ -297,10 +298,17 @@ func Registered(w http.ResponseWriter, r *http.Request) {
 		returnData.Result = 0
 	} else if result.Error() == "replace" {
 		returnData.Result = 1
+	} else if result.Error() == "already registered" {
+		returnData.errorMessage(w, -6, "Registered:already registered")
+		return
+	} else if result.Error() == "not match" {
+		returnData.errorMessage(w, -7, "Registered:not match")
+		return
 	} else {
 		returnData.errorMessage(w, -5, "Registered:not found")
 		return
 	}
+	msg.Log("register success:", result.Error())
 
 	b, _ := json.Marshal(returnData)
 
@@ -345,7 +353,7 @@ func RegisteredStatus(w http.ResponseWriter, r *http.Request) {
 
 	_, err = mgodb.AlphaData.PlayerinfoAlpha(id.ID)
 	if err != nil {
-		returnData.errorMessage(w, -4, "RegisteredStatus:not found")
+		returnData.errorMessage(w, -5, "RegisteredStatus:not found")
 		return
 	}
 

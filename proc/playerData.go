@@ -5,6 +5,7 @@ import (
 	"alphaconnect/spec"
 	"alphaconnect/util"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"log"
 	"mgodb"
@@ -22,6 +23,7 @@ type PlayerData struct {
 	CreateTime      int64                `json:"createTime"`
 	RegisteredTime  int64                `json:"registeredTime"`
 	AlphaID         string               `json:"alphaID"`
+	CurrentID       string               `json:"currentID"`
 	LastTime        int64                `json:"lastTime"`
 	InheritCnt      int32                `json:"inheritCnt"`
 	ExpData         spec.ExpData         `json:"expData"`
@@ -185,6 +187,10 @@ func GetPlayerData(info *mgodb.G_PlayerInfo) []byte {
 	pd.InheritCnt = info.RFIDCardData.AccountData.InheritCount
 	pd.RegisteredTime = info.RegisteredTime
 	pd.AlphaID = info.AlphaID
+
+	cID := info.CurrentId
+	cSum := (cID & 0x0f) + ((cID >> 8) & 0x0f) + ((cID >> 16) & 0x0f) + ((cID >> 24) & 0x0f)
+	pd.CurrentID = fmt.Sprintf("%0*d", 10, cID) + fmt.Sprintf("%0*d", 2, cSum)
 
 	//寫入經驗值
 	e1 := info.RFIDCardData.GetExpData().GetType1()
